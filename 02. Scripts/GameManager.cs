@@ -397,15 +397,15 @@ public class GameManager : MonoBehaviour
     //    AddFemaleInventoryItem(itemKey, 1);
     //}
 
-    public void test2(string itemKey)
-    {
-        AddMaleInventoryItem(itemKey, 1);
-    }
-
-    //public void test3(int bitIndex)
+    //public void test2(string itemKey)
     //{
-    //    UnlockCutscene(bitIndex);
+    //    AddMaleInventoryItem(itemKey, 1);
     //}
+
+    public void test3(int bitIndex)
+    {
+        UnlockCutscene(bitIndex);
+    }
 
     //public void test4(int newSavePoint)
     //{
