@@ -402,10 +402,10 @@ public class GameManager : MonoBehaviour
     //    AddMaleInventoryItem(itemKey, 1);
     //}
 
-    public void test3(int bitIndex)
-    {
-        UnlockCutscene(bitIndex);
-    }
+    //public void test3(int bitIndex)
+    //{
+    //    UnlockCutscene(bitIndex);
+    //}
 
     //public void test4(int newSavePoint)
     //{
