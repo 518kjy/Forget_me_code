@@ -17,12 +17,11 @@ public class ItemPickup : MonoBehaviour
 
     void OnMouseDown()
     {
-
         if (picked) return;
         store = GameObject.FindWithTag("Player").GetComponent<InventoryStore>();
         if (!store) { Debug.LogWarning("[Pickup] store null"); return; }
 
-        // 경쟁 클릭 방지
+        // 동시 클릭 방지
         picked = true;
         GetComponent<Collider>().enabled = false;
 

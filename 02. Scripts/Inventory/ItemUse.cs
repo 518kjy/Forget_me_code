@@ -16,9 +16,9 @@ public class ItemUse : MonoBehaviour, IItemUse
 
     public void Use(ItemEffectContext ctx)
     {
-        if (string.IsNullOrEmpty(key)) { Debug.LogWarning("[ItemUse] key 미입력"); return; }
-        if (effects == null || effects.Length == 0) { Debug.LogWarning($"[ItemUse:{key}] 효과 미지정"); return; }
-        if (!ctx.user) { Debug.LogWarning($"[ItemUse:{key}] ctx.user null"); return; }
+        if (string.IsNullOrEmpty(key))                  { Debug.LogWarning("[ItemUse] key 미입력"); return; }
+        if (effects == null || effects.Length == 0)     { Debug.LogWarning($"[ItemUse:{key}] 효과 미지정"); return; }
+        if (!ctx.user)                                  { Debug.LogWarning($"[ItemUse:{key}] ctx.user null"); return; }
 
         bool anySuccess = false;
         foreach (var fx in effects)

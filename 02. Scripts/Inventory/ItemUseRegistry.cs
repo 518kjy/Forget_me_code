@@ -12,8 +12,9 @@ public interface IItemUse
 public class ItemUseRegistry : MonoBehaviour
 {
     // 싱글턴
-    public static ItemUseRegistry Instance = new ItemUseRegistry();
+    public static ItemUseRegistry Instance { get; private set; }
 
+    [Header("여기에 item_use 스크립트 프리팹 넣기")]
     [SerializeField] MonoBehaviour[] handlers; // IItemUse 구현들 Drag&Drop
     Dictionary<string, IItemUse> map;
 

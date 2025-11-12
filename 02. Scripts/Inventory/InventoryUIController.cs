@@ -17,8 +17,8 @@ public class InventoryUIController : MonoBehaviour
         // 2) 그래도 없으면 씬에서 탐색 (비활성 포함)
         if (!registry) registry = FindObjectOfType<ItemUseRegistry>(true);
     }
-    
-     void Start()
+
+    void Start()
     {
         // 찐 Last 체크
         if (!registry)
@@ -65,6 +65,7 @@ public class InventoryUIController : MonoBehaviour
             if (i >= itemSlot.Length) break;
 
             string id = kv.Key;
+            //Debug.Log($"[UI] 아이템 슬롯 {i}: {id} x{kv.Value}, {kv.Key}");
             var btn = itemSlot[i];
 
             // 아이콘: Resources/Icons/{key}.png (없으면 이미지 비활성)
@@ -72,6 +73,7 @@ public class InventoryUIController : MonoBehaviour
             if (icon != null)
             {
                 btn.image.sprite = icon;
+                //Debug.Log($"[UI] 아이콘 로드 성공: {icon.name}");
                 btn.image.enabled = true;
             }
 
@@ -90,7 +92,15 @@ public class InventoryUIController : MonoBehaviour
             return;
         }
 
-        var ctx = new ItemEffectContext { user = player, store = store, runner = this, itemPrefabs = null };
+        var ctx = new ItemEffectContext
+        {
+            user = player,
+            store = store,
+            runner = this,
+            itemPrefabs = null,
+            itemKey = itemId,
+            source = ItemUseSource.UI
+        };
 
         if (!registry.TryUse(itemId, ctx, out bool consumable))
         {
@@ -98,8 +108,14 @@ public class InventoryUIController : MonoBehaviour
             return;
         }
 
+        Debug.Log($"[UI] TryUse 성공! consumable={consumable}");  // ← 추가
+
         if (consumable)
+        {
+            Debug.Log($"[UI] 소모 처리 전 수량: {store.GetCount(itemId)}");  // ← 추가
             store.Remove(itemId, 1);
+            Debug.Log($"[UI] 소모 후 수량: {store.GetCount(itemId)}");  // ← 추가
+        }
 
         Refresh();
     }

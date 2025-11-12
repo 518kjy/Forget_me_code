@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class PlayerItemEquick : MonoBehaviour
@@ -8,32 +9,45 @@ public class PlayerItemEquick : MonoBehaviour
     public GameObject equippedInstance;   // 씬 인스턴스
     public GameObject equippedPrefab;     // 장착 프리팹(에셋 레퍼런스)
 
+    public string equippedKey;      // 현재 장착 아이템 key
+    public bool equippedConsumable; // 소모 여부
+
+
+
+    void Awake()
+    {
+        if (!pv)
+            pv = GetComponent<PhotonView>() ?? GetComponentInParent<PhotonView>();
+    }
     /// <summary>
     /// 같은 프리팹이면 토글(해제), 다르면 교체
     /// </summary>
-    public GameObject Equip(GameObject prefab)
+    public GameObject Equip(GameObject prefab, string key = null)
     {
         if (!rightHand || !prefab) return null;
 
-        // 1) 로컬 처리
+        // key 없으면 prefab.name 사용
+        if (string.IsNullOrEmpty(key))
+            key = prefab.name;
+
         if (equippedInstance == null)
         {
-            var go = EquipNew(prefab, prefab.name);
-            // 2) 원격 동기화(본인 제외)
-            RequestEquip(prefab.name);
+            var go = EquipNew(prefab, key);
+            RequestEquip(key);
             return go;
         }
-        else if (equippedPrefab == prefab) // 프리팹 에셋으로 비교
+        else if (equippedPrefab == prefab && equippedKey == key)
         {
+            // 같은 아이템 다시 누르면 해제(토글)
             Unequip();
-            RequestUnequip(); // 원격도 해제
+            RequestUnequip();
             return null;
         }
         else
         {
             Unequip();
-            var go = EquipNew(prefab, prefab.name);
-            RequestEquip(prefab.name);
+            var go = EquipNew(prefab, key);
+            RequestEquip(key);
             return go;
         }
     }
@@ -46,7 +60,10 @@ public class PlayerItemEquick : MonoBehaviour
         go.transform.localScale = Vector3.one;
 
         equippedInstance = go;
-        equippedPrefab  = prefab;
+        equippedPrefab = prefab;
+        equippedKey = key;
+        // equippedConsumable = consumable;
+
         return go;
     }
 
@@ -54,19 +71,19 @@ public class PlayerItemEquick : MonoBehaviour
     {
         if (equippedInstance) Destroy(equippedInstance);
         equippedInstance = null;
-        equippedPrefab   = null;
+        equippedPrefab = null;
     }
 
     // === 네트워크 브로드캐스트(소유자만) ===
     void RequestEquip(string key)
     {
         Debug.Log(key);
-        
+
         if (!pv || !pv.isMine) return;
         pv.RPC(nameof(RpcEquipByKey), PhotonTargets.OthersBuffered, key); // OthersBuffered
     }
 
-    void RequestUnequip()
+    public void RequestUnequip()
     {
         if (!pv || !pv.isMine) return;
         pv.RPC(nameof(RpcUnequip), PhotonTargets.OthersBuffered);
@@ -95,8 +112,21 @@ public class PlayerItemEquick : MonoBehaviour
     }
 
     [PunRPC]
-    void RpcUnequip(PhotonMessageInfo info)
+    public void RpcUnequip(PhotonMessageInfo info)
     {
         Unequip();
+    }
+
+    // === 아이템 포톤 네트워크 처리 함수 ===
+     [PunRPC]
+    public void RpcSetFlashLight(bool enabled)
+    {
+        if (!equippedInstance) return;
+
+
+        var light = equippedInstance.GetComponentInChildren<Light>();
+        if (!light) return;
+
+        light.enabled = enabled;
     }
 }
