@@ -392,15 +392,15 @@ public class GameManager : MonoBehaviour
     // 디버그용   다 지울 것 ////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    public void test1(string itemKey)
-    {
-        AddFemaleInventoryItem(itemKey, 1);
-    }
-
-    //public void test2(string itemKey)
+    //public void test1(string itemKey)
     //{
-    //    AddMaleInventoryItem(itemKey, 1);
+    //    AddFemaleInventoryItem(itemKey, 1);
     //}
+
+    public void test2(string itemKey)
+    {
+        AddMaleInventoryItem(itemKey, 1);
+    }
 
     //public void test3(int bitIndex)
     //{
