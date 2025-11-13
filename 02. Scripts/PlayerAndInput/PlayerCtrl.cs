@@ -1,4 +1,5 @@
-﻿//#define UNITY_TESTING       // 단독 실행일 시 켤것
+﻿//#define CBT_MODE
+#define RELEASE_MODE
 
 using System;
 using System.Collections;
@@ -7,24 +8,24 @@ using System.Diagnostics.Tracing;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEngine.Events;
-using Unity.VisualScripting;
+
 
 public class PlayerCtrl : MonoBehaviour
 {
     // ====== Inspector ======
     [Header("Refs")]
-    [SerializeField] private Animator anim;
+    private Animator anim;
     private Transform holdPivot;
     private Transform blockCheck;
     private Transform itemCheck;
     private Collider playerCol;
-    [SerializeField] private InputManager input;
-    [SerializeField] private InteractionManager interaction;
+    private InputManager input;
+    private InteractionManager interaction;
 
     [Header("Move")]
     private float walkSpeed = 1f;
     private float runSpeed = 2f;
-    private float damp = 0.35f;
+    private float damp = 1f;
     private float turnSpeed = 90f;
 
     /// <summary>
@@ -32,16 +33,30 @@ public class PlayerCtrl : MonoBehaviour
     /// 
     /// UnityEvent onOpened << I를 입력하면 << UICanvas가 SetActive 왔다리갔다리
     /// </summary>
+    /// 
+    /// 
+    [Header("아이템 시스템 연동")]
+    public EquippedItemUser equippedUser;
 
     [Header("인벤토리 캔버스(최상위 GameObject)")]
     public GameObject inventoryCanvas;
     [Header("메뉴 캔버스(최상위 GameObject)")]
     public GameObject menuCanvas;
-    [Header("인벤토리 실제 저장소")]
-    public InventoryStore store;
+    // [Header("인벤토리 실제 저장소")]
+    // public InventoryStore store;
+
+    public PlayerItemEquick itemEquick;
 
     [Header("창이 열릴 때 호출")]
     public UnityEvent onOpened;
+
+    [Header("던지기 관련")]
+    public Transform throwMuzzle;
+    public float throwForce = 12f;
+
+    public StunTalisman pendingTalisman;
+
+    bool isAiming;
 
     [Header("Jump")]
     private float jumpPower = 300f;
@@ -58,7 +73,7 @@ public class PlayerCtrl : MonoBehaviour
     [Header("Colors")]
     private Color originColor = Color.white;
 
-    [SerializeField] IInputSource inputSrc;
+    IInputSource inputSrc;
 
     // ====== Runtime ======
     private PhotonView pv;
@@ -82,12 +97,13 @@ public class PlayerCtrl : MonoBehaviour
 
 
     //위치 정보를 송수신할 때 사용할 변수 선언 및 초기값 설정 
-    [SerializeField] Vector3 currPos = Vector3.zero;
-    [SerializeField] Quaternion currRot = Quaternion.identity;
+    Vector3 currPos = Vector3.zero;
+    Quaternion currRot = Quaternion.identity;
 
     // ====== Unity ======
     private void Awake()
     {
+         PhotonNetwork.logLevel = PhotonLogLevel.Full;
         pv = GetComponent<PhotonView>();
 
         myTr = GetComponent<Transform>();
@@ -95,35 +111,21 @@ public class PlayerCtrl : MonoBehaviour
         anim = GetComponentInChildren<Animator>();
         lastRotation = transform.rotation;
 
-#if UNITY_TESTING
-        input = GameObject.Find("InputManager").GetComponent<InputManager>();
-        interaction = GameObject.Find("InteractManager").GetComponent<InteractionManager>();
-
-        gameObject.tag = "Player";
-        gameObject.GetComponent<Rigidbody>().useGravity = true;
-
-        CameraCtrl cam = Camera.main.AddComponent<CameraCtrl>();
-        cam.enabled = true;
-        cam.SetInitPos(transform.Find("camPos"));
-#else
         StartCoroutine(SetManager());
-#endif
 
         if (!holdPivot) Debug.LogWarning("[PlayerCtrl1] holdPivot 미지정");
         if (!blockCheck) Debug.LogWarning("[PlayerCtrl1] blockCheck 미지정");
         if (!itemCheck) Debug.LogWarning("[PlayerCtrl1] itemCheck 미지정");
         if (inventoryCanvas) inventoryCanvas.SetActive(false);
 
-#if UNITY_TESTING
-        if (true)
-#else
+        if (!equippedUser) equippedUser = GetComponent<EquippedItemUser>();
+
         //PhotonView Observed Components 속성에 PlayerCtrl(현재) 스크립트 Component를 연결
         pv.ObservedComponents[0] = this;
         //데이타 전송 타입을 설정
         pv.synchronization = ViewSynchronization.UnreliableOnChange;
 
         if (pv.isMine)
-#endif
         {
             // 여기쓰면 망가질 거 같은데
             Debug.Log($"InputSource 적용 : {input}");
@@ -139,13 +141,12 @@ public class PlayerCtrl : MonoBehaviour
         currPos = myTr.position;
         currRot = myTr.rotation;
 
-
-            SetAnimMove(false, 0, 0);
+        SetAnimMove(false, 0, 0);
     }
 
     private void Start()
     {
-
+        //GetComponent<InventoryStore>().Add("Talisman", 5);
     }
 
     IEnumerator SetManager()
@@ -169,11 +170,127 @@ public class PlayerCtrl : MonoBehaviour
 
     private void Update()
     {
-#if UNITY_TESTING
-        if (true)
+#if CBT_MODE
+        // 지면 체크
+        isGrounded = Physics.Raycast(transform.position + Vector3.up * 0.05f,
+                                     Vector3.down, groundCheckDistance, groundMask);
+
+        // 달리기
+        runHeld = input.RunPressed;
+        anim.SetBool("Run", input.RunPressed);
+
+        // 애니메이터 아이들
+        bool anyKey = input.AnyKey;
+        // 이동
+        float h = input.H;
+        float v = input.V;
+        SetAnimMove(anyKey, LR: -h, FB: v);
+
+        // 인벤토리
+        bool i = input.IsInventory;
+
+        if (i)
+        {
+            bool next = !inventoryCanvas.activeSelf;
+            inventoryCanvas.SetActive(next);
+            if (next) onOpened?.Invoke(); // 열릴 때 한 번만 갱신 훅
+        }
+
+        // 상호작용 가능, 다른 플레이어가 그 퍼즐을 풀지 않고 있을 때 만 실행! // 준
+        if (input.InteractPressed && input.CanInteractNow)
+        {
+            Debug.Log($"입력 들어감: {gameObject.name}");
+            interaction.TryInteractByHover(this.gameObject, input.Hovered, input.HitInfo);
+        }
+
+
+        // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+        // // === 부적: 우클릭으로 준비, 좌클릭으로 던지기 ===
+        // // ====== StunTalisman 에임 + 던지기 ======
+        // if (pendingTalisman != null)
+        // {
+        //     // 마우스 누름 (에임 시작)
+        //     if (Input.GetMouseButtonDown(0))
+        //     {
+        //         isAiming = true;
+        //         Debug.Log("[PlayerCtrl] 부적 에임 시작!");
+        //         // Todo : 애니메이션 추가
+        //     }
+
+        //     // 마우스 뗌 (던지기!)
+        //     if (Input.GetMouseButtonUp(0))
+        //     {
+        //         if (isAiming)
+        //         {
+        //             Vector3 dir = (throwMuzzle != null ? throwMuzzle.forward : transform.forward);
+        //             Vector3 velocity = dir.normalized * throwForce;
+        //             pendingTalisman.Launch(velocity);
+        //             pendingTalisman = null;
+        //             isAiming = false;
+        //             Debug.Log("[PlayerCtrl] 부적 던짐! (에임)");
+        //             // anim.SetBool("Aiming", false);
+        //         }
+        //     }
+        // }
+        // else
+        // {
+        //     // 부적 없으면 에임 해제
+        //     if (isAiming)
+        //     {
+        //         isAiming = false;
+        //         // anim.SetBool("Aiming", false);
+        //     }
+        // }
+
+        // StunTalisman 에임 + 던지기 (싱글플레이 전용) ★★★
+        if (pendingTalisman != null)
+        {
+            if (Input.GetMouseButtonDown(0))
+            {
+                isAiming = true;
+                Debug.Log("에임 시작! 부적 장전 완료");
+            }
+
+            if (Input.GetMouseButtonUp(0) && isAiming)
+            {
+                Vector3 dir = throwMuzzle ? throwMuzzle.forward : transform.forward;
+                Vector3 velocity = dir * throwForce;
+
+                pendingTalisman.Launch(velocity);
+                pendingTalisman = null;
+                isAiming = false;
+
+                Debug.Log("부적 발사!");
+            }
+        }
+        else
+        {
+            if (isAiming) isAiming = false;
+        }
+
+        // if (isAiming)
+        // {
+        //     // 카메라 FOV 줄이기 (줌인)
+        //     Camera.main.fieldOfView = Mathf.Lerp(Camera.main.fieldOfView, 50f, Time.deltaTime * 5f);
+
+        //     // 조준선 (GUI 또는 LineRenderer)
+        //     // 또는 throwMuzzle에 ParticleSystem (에임 이펙트) 활성
+        // }
+        // else if(pendingTalisman == null && Input.GetMouseButtonUp(0))
+        // {
+        //     // 카메라 FOV 원상복구
+        //     Camera.main.fieldOfView = Mathf.Lerp(Camera.main.fieldOfView, 60f, Time.deltaTime * 5f); 
+        // }
+
+        // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+        // 그랩 상호작용, 나중에 매니저로 빼려면 빼고
+        // Grab();
+        // ToggleGrab();
+        // CheckTargets();
 #else
         if (pv.isMine)
-#endif
         {
             // 지면 체크
             isGrounded = Physics.Raycast(transform.position + Vector3.up * 0.05f,
@@ -199,8 +316,9 @@ public class PlayerCtrl : MonoBehaviour
                 inventoryCanvas.SetActive(next);
                 if (next) onOpened?.Invoke(); // 열릴 때 한 번만 갱신 훅
             }
+
             // 일반 상태에서 메뉴창 
-            if(input.EscPressed && (GameManager.Instance.CurrentState == GameState.Normal || GameManager.Instance.CurrentState ==  GameState.InMenu))
+            if (input.EscPressed && (GameManager.Instance.CurrentState == GameState.Normal || GameManager.Instance.CurrentState == GameState.InMenu))
             {
                 bool next = !menuCanvas.activeSelf;
                 menuCanvas.SetActive(next);
@@ -222,6 +340,27 @@ public class PlayerCtrl : MonoBehaviour
                 interaction.TryGetOutInteract();
             }
 
+            // === 부적: 우클릭으로 준비, 좌클릭으로 던지기 ===
+            // 우클릭: 현재 장착 아이템 사용 시도 (소모 + 손에 부적 생성)
+            if (pendingTalisman != null)
+            {
+                if (Input.GetMouseButtonDown(0))
+                {
+                    isAiming = true;
+                    pv.RPC(nameof(RpcSetAiming), PhotonTargets.All, true);
+                }
+
+                if (Input.GetMouseButtonUp(0) && isAiming)
+                {
+                    Vector3 dir = throwMuzzle ? throwMuzzle.forward : transform.forward;
+                    Vector3 velocity = dir * throwForce;
+
+                    pendingTalisman.Launch(velocity);
+                    pv.RPC(nameof(RpcClearPending), PhotonTargets.All);
+                    pendingTalisman = null;
+                    isAiming = false;
+                }
+            }
 
             // 그랩 상호작용, 나중에 매니저로 빼려면 빼고
             // Grab();
@@ -239,13 +378,15 @@ public class PlayerCtrl : MonoBehaviour
             // 애니메이션 동기화 필요하면 여기서 뭐라도 해보자
 
         }
+#endif
     }
 
 
     private void FixedUpdate()
     {
         if (!input) return;
-#if !UNITY_TESTING
+#if CBT_MODE
+#else
         if (!pv.isMine) return;
 #endif
 
@@ -303,7 +444,7 @@ public class PlayerCtrl : MonoBehaviour
             lastRotation = transform.rotation;
         }
     }
-
+    // ====== Item Use ======
     // ====== Interactions ======
     private void Grab()
     {
@@ -448,6 +589,42 @@ public class PlayerCtrl : MonoBehaviour
         }
     }
 
+    public void MoveNextScene()
+    {
+        //if (PhotonNetwork.isMasterClient)
+        //{
+        //    // 방 완료 후 컷씬으로 이동
+        //    SceneMoveManager.Instance.LoadScene("scCutscene");
+        //}
+        //else
+        //{
+        //    pv.RPC("RequestNextScene", PhotonTargets.MasterClient, null);           // 씬 다중 호출되는지 확인해볼것
+        //}
+        pv.RPC("RequestNextScene", PhotonTargets.All, null);
+    }
+
+    [PunRPC]
+    void RequestNextScene()
+    {
+        // 방 완료 후 컷씬으로 이동
+        SceneMoveManager.Instance.LoadScene("scCutscene");
+    }
+
+    // ====== Photon RPCs ======
+
+    [PunRPC]
+    void RpcSetAiming(bool aiming, PhotonMessageInfo info)
+    {
+        isAiming = aiming;
+        // anim.SetBool("Aiming", aiming);
+    }
+
+    [PunRPC]
+    void RpcClearPending(PhotonMessageInfo info)
+    {
+        pendingTalisman = null;
+    }
+
     void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {
         //로컬, 원격 / 박싱, 언박싱 순서 똑같이 해야함.
@@ -471,6 +648,9 @@ public class PlayerCtrl : MonoBehaviour
             stream.SendNext(input.InteractPressed);
             stream.SendNext(input.CanInteractNow);
             stream.SendNext(input.IsInventory);
+
+            stream.SendNext(isAiming);
+
         }
         //원격 플레이어의 동작 정보를 수신
         else
@@ -491,6 +671,7 @@ public class PlayerCtrl : MonoBehaviour
             bool interactPulse = (bool)stream.ReceiveNext();
             bool canInteract = (bool)stream.ReceiveNext();
             bool inventory = (bool)stream.ReceiveNext();
+            isAiming = (bool)stream.ReceiveNext();
 
             // 원격 입력 소스에 반영
             (inputSrc as NetInputSource)?.Apply(h, v, anyKey, run, move, jumpPulse, esc, interactPulse, canInteract, inventory);

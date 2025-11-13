@@ -1,4 +1,4 @@
-﻿using System.Collections;
+﻿    using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -27,9 +27,12 @@ public class csCutsceneAction : MonoBehaviour
     // 포톤 할거면 당연히 달아줘야하는
     PhotonView pv;
     // 현재 컷신 정보를 뽑아내 저장
+    [Header("현재 컷씬")]
+    [SerializeField]
     CutsceneConfig currentCutscene;
-    //// 영상 재생 종료 후 트랜지션 동안 쓸 배경 가림막
-    //Image backplate;
+    // 대화 컷신 출력 시 표정 변화 후 복구할 시 필요한 원본
+    Sprite spGirl;
+    Sprite spBoy;
     // 대화 컷신 출력 시 표정 변화 후 복구할 시 필요한 원본
     Sprite origGirl;
     Sprite origBoy;
@@ -42,6 +45,9 @@ public class csCutsceneAction : MonoBehaviour
     int idxDialog = 0;
     // 대화를 넘기고 대기시간 걸기
     float waitCount = 0f;
+    // 설정할 대기시간
+    [Range(0f, 10f)]
+    public float inputDelay = 5f;
 
     /// <summary>
     /// 동작 순서
@@ -75,16 +81,35 @@ public class csCutsceneAction : MonoBehaviour
             Debug.LogError("CutsceneConfig 미지정");
             return;
         }
+
+        StartCoroutine(SetCutsceneConfig());
+    }
+
+    IEnumerator SetCutsceneConfig()
+    {
         // 현재 씬 번호와 일치하는 컷신 조회
-        foreach(var cut in cutscenes)
+        while (currentCutscene == null)
         {
-            if (cut.id == SceneMoveManager.Instance.getSceneNum())
+            yield return new WaitForSeconds(0.5f);
+
+            foreach (var cut in cutscenes)
             {
-                currentCutscene = cut;
+                // 디버그용
+                if (cut.id == 0)
+                {
+                    currentCutscene = cut;
+                    break;
+                }
+
+                if (cut.id == SceneMoveManager.Instance.getSceneNum())
+                {
+                    currentCutscene = cut;
+                    break;
+                }
             }
         }
         // 비디오 컷씬 종료 이벤트 구독
-        if(video != null)
+        if (video != null)
         {
             video.loopPointReached += OnVideoEnd;
         }
@@ -102,6 +127,8 @@ public class csCutsceneAction : MonoBehaviour
                 PlayDialog();       // Update에서 dialog 출력 인덱스를 하나씩 증가시켜야겠지?
                 break;
         }
+
+        yield break;
     }
 
     void PlayVideo()
@@ -135,8 +162,8 @@ public class csCutsceneAction : MonoBehaviour
     {                                       // 그럼 왜 썼음?  이벤트 구독 오버로드 맞춰주려고 (지워보면 에러로 그 내용을 알 수 있다)
         Debug.Log("비디오 재생에 완료되었습니다. 다음 씬 전환 대기");
 
-        // 가림막 활성화 (안하면 영상이 안보임)
-        backplate.SetActive(true);
+        // 가림막 활성화 (안하면 뒷 배경이 보임)
+        if (backplate.activeSelf == false)  backplate.SetActive(true);
 
         // 마스터라면 씬 전환 실행
         if (PhotonNetwork.isMasterClient)
@@ -154,6 +181,8 @@ public class csCutsceneAction : MonoBehaviour
     void DialogEnd()
     {
         Debug.Log("대화 컷씬 재생에 완료되었습니다. 다음 씬 전환 대기");
+
+        GameManager.Instance.SetState(GameState.Normal);
 
         // 마스터라면 씬 전환 실행
         if (PhotonNetwork.isMasterClient)
@@ -197,6 +226,8 @@ public class csCutsceneAction : MonoBehaviour
     // 사실상 다이얼로그 재생용으로 쓰는 상황
     private void Update()
     {
+        if (currentCutscene == null) return;
+        
         if (currentCutscene.cutsceneType == CutsceneType.Video) return;     // 영상 재생중, 업뎃 필요없음, 돌아가~
 
         // 엔딩을 한 번 호출했다면 다시는 접근하지 말라
@@ -215,25 +246,27 @@ public class csCutsceneAction : MonoBehaviour
         txtDialog.text = currentCutscene.lines[idxDialog].text;             // 대사
 
         // 이미지 적용 파트
-        var sp = currentCutscene.lines[idxDialog].overrideCharacterSprite;  // 덮어씌울 이미지
-        
         if (txtName.text == "엘마") // 여주 처리
         {
-            if (sp != null) imageGirl.sprite = sp;      // 대체 이미지 있으면 삽입
+            spGirl = currentCutscene.lines[idxDialog].overrideCharacterSprite;  // 덮어씌울 이미지
+
+            if (spGirl != null) imageGirl.sprite = spGirl;      // 대체 이미지 있으면 삽입
             else imageGirl.sprite = origGirl;
-                imageGirl.color = Color.white;
+            imageGirl.color = Color.white;
             imageBoy.color = Color.gray;
         }
         else                       // 기타 처리
         {
-            if (sp != null) imageBoy.sprite = sp;      // 대체 이미지 있으면 삽입
+            spBoy = currentCutscene.lines[idxDialog].overrideCharacterSprite;  // 덮어씌울 이미지
+
+            if (spBoy != null) imageBoy.sprite = spBoy;      // 대체 이미지 있으면 삽입
             else imageBoy.sprite = origBoy;
             imageBoy.color = Color.white;
             imageGirl.color = Color.gray;
         }
 
         // 입력을 통한 인덱스 갱신        // TODO: 입력 매니저로 빼서 처리할지 팀원들과 상의하기
-        if (Input.GetKeyDown(KeyCode.Space) && waitCount >= 5f) 
+        if (Input.GetKeyDown(KeyCode.Space) && waitCount >= inputDelay) 
         { 
             idxDialog++;
             waitCount = 0f;
@@ -248,7 +281,9 @@ public class csCutsceneAction : MonoBehaviour
     public void OnClickSkip()
     {
         Debug.Log("!!스킵 버튼 누름!!");
-        
+
+        backplate.SetActive(true);
+
         switch (currentCutscene.cutsceneType) 
         {
             case CutsceneType.Video:

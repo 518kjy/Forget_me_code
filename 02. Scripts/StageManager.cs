@@ -1,8 +1,10 @@
-﻿//#define UNITY_TESTING       // 단독 실행일 시 켤것
+﻿//#define CBT_MODE
+#define RELEASE_MODE
 
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class StageManager : MonoBehaviour
 {
@@ -15,11 +17,12 @@ public class StageManager : MonoBehaviour
     public bool isReady;
 
     //플레어의 생성 위치 저장 레퍼런스
-    private GameObject[] playerPos;
+    [SerializeField] private GameObject[] playerPos;
     // 퍼즐 배치 위치 저장 래퍼런스
     private GameObject[] puzzlePos;
     // 각 스테이지마다 스테이지 매니저를 생성, 그때마다 필요한 퍼즐 프리팹 할당
     public GameObject[] puzzles;
+    public GameObject foxPos;
 
     private void Awake()
     {
@@ -58,6 +61,9 @@ public class StageManager : MonoBehaviour
 
         // 퍼즐 배치 위치
         puzzlePos = GameObject.FindGameObjectsWithTag("PuzzlePos");
+
+        // 여우 생성 위치
+        foxPos = GameObject.FindGameObjectWithTag("FoxPos");
     }
 
     // 씬 이동 매니저에서 호출할 오브젝트 배치 함수
@@ -67,10 +73,20 @@ public class StageManager : MonoBehaviour
 
         // 플레이어는 모두가 만들되 자신 타인을 구분지어야한다
         StartCoroutine(this.CreatePlayer());
-        // 퍼즐은 방장이 만든다
-#if !UNITY_TESTING
+
+        // 현재 씬이 DemoScene 일때만 여우 생성
+        if (SceneManager.GetActiveScene().name == "DemoScene")
+            StartCoroutine(this.FoxSpawn());
+#if !CBT_MODE
         if (PhotonNetwork.connected && PhotonNetwork.isMasterClient)
+        {
+            // 퍼즐은 방장이 만든다
             StartCoroutine(this.GeneratePuzzle());
+
+            // 현재 씬이 DemoScene 일때만 여우 생성
+            // if (SceneManager.GetActiveScene().name == "DemoScene")
+            //     StartCoroutine(this.FoxSpawn());
+        }
 #endif
     }
 
@@ -85,7 +101,7 @@ public class StageManager : MonoBehaviour
         if (!PhotonNetwork.connectedAndReady || currRoom.PlayerCount != 2)
         {
             Debug.LogError("네트워크가 이상한데??");
-#if !UNITY_TESTING
+#if !CBT_MODE
             yield break;
         }
 
@@ -143,8 +159,10 @@ public class StageManager : MonoBehaviour
             yield return new WaitForSeconds(0.8f);
         }
 
-        CameraCtrl controller = cam.AddComponent<CameraCtrl>();
-
+        CameraCtrl controller = cam.GetComponent<CameraCtrl>();
+        if (controller == null)
+            controller = cam.AddComponent<CameraCtrl>();
+        controller.enabled = true;
         controller.SetInitPos(playerCamPos.transform);
 
         // 카메라 추적 위치 설정
@@ -185,6 +203,17 @@ public class StageManager : MonoBehaviour
             Debug.Log($"{names[i]} Loaded");
         }
 
+        yield break;
+    }
+
+    // 여우는 방장만, 씬에 생성하기
+    IEnumerator FoxSpawn()
+    {
+        if (PhotonNetwork.isMasterClient)
+        {
+            GameObject fox = PhotonNetwork.InstantiateSceneObject("Fox", foxPos.transform.position, foxPos.transform.rotation, 0, null);
+            Debug.Log("여우 생성 완료");
+        }
         yield break;
     }
 

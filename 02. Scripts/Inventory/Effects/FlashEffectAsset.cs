@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,7 +8,7 @@ public class FlashEffectAsset : ItemEffectAsset
     public override bool Execute(ItemEffectContext ctx)
     {
         var equip = ctx.user ? ctx.user.GetComponent<PlayerItemEquick>() : null;
-        var pv    = ctx.user ? ctx.user.GetComponent<PhotonView>() : null;
+        var pv = ctx.user ? ctx.user.GetComponent<PhotonView>() : null;
 
         if (!equip || !pv)
         {

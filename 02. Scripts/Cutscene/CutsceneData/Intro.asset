@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 202a5a1d3c531da44805a9a5ba7fb4ab, type: 3}
   m_Name: Intro
   m_EditorClassIdentifier: 
-  id: 0
+  id: 1
   cutsceneType: 0
   videoClip: {fileID: 32900000, guid: 4c707d3dad1f5ef409be7ec63239fde3, type: 3}
   bgmClip: {fileID: 0}

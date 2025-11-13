@@ -1,84 +1,202 @@
+﻿//using UnityEngine;
+//using UnityEngine.UI;
+
+//// ItemUseRegistry: IItemUse[] 등록해서 키별로 Use 라우팅
+//public class InventoryUIController : MonoBehaviour
+//{
+//    public InventoryStore store;
+//    public ItemUseRegistry registry;    // DB 대신 사용
+//    public Button[] itemSlot;
+//    public GameObject player;
+
+//    void Awake()
+//    {
+//        // 1) 인스펙터 주입
+//        if (!registry) registry = ItemUseRegistry.Instance;
+
+//        // 2) 그래도 없으면 씬에서 탐색 (비활성 포함)
+//        if (!registry) registry = FindObjectOfType<ItemUseRegistry>(true);
+//    }
+
+//    void Start()
+//    {
+//        // 찐 Last 체크
+//        if (!registry)
+//        {
+//            Debug.LogError("[UI] ItemUseRegistry 못 찾음");
+//            return;
+//        }
+//    }
+//    void OnEnable()
+//    {
+//        // 3) 인스펙터 주입
+//        if (!registry) registry = ItemUseRegistry.Instance;
+
+//        Debug.Log(registry.name);
+//        if (store != null) store.OnInventoryChanged += HandleInventoryChanged;
+//        Refresh();
+//    }
+
+//    void OnDisable()
+//    {
+//        if (store != null) store.OnInventoryChanged -= HandleInventoryChanged;
+//    }
+
+//    void HandleInventoryChanged(string itemId, int newCount) => Refresh();
+
+//    public void Refresh()
+//    {
+//        if (store == null || itemSlot == null) return;
+
+//        // 1) 초기화
+//        foreach (var btn in itemSlot)
+//        {
+//            btn.onClick.RemoveAllListeners();
+//            btn.image.sprite = null;
+//            btn.image.enabled = false;
+//            btn.interactable = false;
+//        }
+
+//        // 2) 스냅샷 -> 슬롯 바인딩
+//        int i = 0;
+//        var snap = store.Snapshot(); // IReadOnlyDictionary<string,int>
+//        foreach (var kv in snap)
+//        {
+//            if (i >= itemSlot.Length) break;
+
+//            string id = kv.Key;
+//            //Debug.Log($"[UI] 아이템 슬롯 {i}: {id} x{kv.Value}, {kv.Key}");
+//            var btn = itemSlot[i];
+
+//            // 아이콘: Resources/Icons/{key}.png (없으면 이미지 비활성)
+//            var icon = Resources.Load<Sprite>($"Icons/{id}");
+//            if (icon != null)
+//            {
+//                btn.image.sprite = icon;
+//                //Debug.Log($"[UI] 아이콘 로드 성공: {icon.name}");
+//                btn.image.enabled = true;
+//            }
+
+//            btn.onClick.AddListener(() => OnClickUse(id));
+//            btn.interactable = true;
+
+//            i++;
+//        }
+//    }
+
+//    void OnClickUse(string itemId)
+//    {
+//        if (registry == null)
+//        {
+//            Debug.LogWarning("[UI] registry 미할당");
+//            return;
+//        }
+
+//        var ctx = new ItemEffectContext
+//        {
+//            user = player,
+//            store = store,
+//            runner = this,
+//            itemPrefabs = null,
+//            itemKey = itemId,
+//            source = ItemUseSource.UI
+//        };
+
+//        if (!registry.TryUse(itemId, ctx, out bool consumable))
+//        {
+//            Debug.LogWarning($"[UI] 핸들러 없음: {itemId}");
+//            return;
+//        }
+
+//        Debug.Log($"[UI] TryUse 성공! consumable={consumable}");  // ← 추가
+
+//        if (consumable)
+//        {
+//            Debug.Log($"[UI] 소모 처리 전 수량: {store.GetCount(itemId)}");  // ← 추가
+//            store.Remove(itemId, 1);
+//            Debug.Log($"[UI] 소모 후 수량: {store.GetCount(itemId)}");  // ← 추가
+//        }
+
+//        Refresh();
+//    }
+//}
+
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-
-// ItemUseRegistry: IItemUse[] 등록해서 키별로 Use 라우팅
 public class InventoryUIController : MonoBehaviour
 {
     public InventoryStore store;
-    public ItemUseRegistry registry;    // DB 대신 사용
-    public Button[] itemSlot;
+    public ItemUseRegistry registry;
+    public InventorySlotUI[] slots;   // Button[] 대신 이걸 사용
     public GameObject player;
 
     void Awake()
     {
-        // 1) 인스펙터 주입
         if (!registry) registry = ItemUseRegistry.Instance;
-
-        // 2) 그래도 없으면 씬에서 탐색 (비활성 포함)
         if (!registry) registry = FindObjectOfType<ItemUseRegistry>(true);
     }
 
     void Start()
     {
-        // 찐 Last 체크
         if (!registry)
         {
             Debug.LogError("[UI] ItemUseRegistry 못 찾음");
             return;
         }
     }
+
     void OnEnable()
     {
-        // 3) 인스펙터 주입
         if (!registry) registry = ItemUseRegistry.Instance;
 
-        Debug.Log(registry.name);
-        if (store != null) store.OnInventoryChanged += HandleInventoryChanged;
+        if (store != null)
+            store.OnInventoryChanged += HandleInventoryChanged;
+
         Refresh();
     }
 
     void OnDisable()
     {
-        if (store != null) store.OnInventoryChanged -= HandleInventoryChanged;
+        if (store != null)
+            store.OnInventoryChanged -= HandleInventoryChanged;
     }
 
     void HandleInventoryChanged(string itemId, int newCount) => Refresh();
 
     public void Refresh()
     {
-        if (store == null || itemSlot == null) return;
+        if (store == null || slots == null) return;
 
-        // 1) 초기화
-        foreach (var btn in itemSlot)
-        {
-            btn.onClick.RemoveAllListeners();
-            btn.image.sprite = null;
-            btn.image.enabled = false;
-            btn.interactable = false;
-        }
+        // 슬롯 먼저 비우기
+        foreach (var slot in slots)
+            if (slot != null) slot.Clear();
 
-        // 2) 스냅샷 -> 슬롯 바인딩
+        var snap = store.Snapshot();
+
+        Debug.Log($"[UI] Snapshot count={snap.Count}");
+
         int i = 0;
-        var snap = store.Snapshot(); // IReadOnlyDictionary<string,int>
         foreach (var kv in snap)
         {
-            if (i >= itemSlot.Length) break;
+            if (i >= slots.Length) break;
 
             string id = kv.Key;
-            //Debug.Log($"[UI] 아이템 슬롯 {i}: {id} x{kv.Value}, {kv.Key}");
-            var btn = itemSlot[i];
+            var slot = slots[i];
 
-            // 아이콘: Resources/Icons/{key}.png (없으면 이미지 비활성)
-            var icon = Resources.Load<Sprite>($"Icons/{id}");
-            if (icon != null)
+            if (slot == null)
             {
-                btn.image.sprite = icon;
-                //Debug.Log($"[UI] 아이콘 로드 성공: {icon.name}");
-                btn.image.enabled = true;
+                i++;
+                continue;
             }
 
-            btn.onClick.AddListener(() => OnClickUse(id));
-            btn.interactable = true;
+            var icon = Resources.Load<Sprite>($"Icons/{id}");
+
+            Debug.Log($"[UI] Slot {i} = {id}, icon={(icon ? icon.name : "null")}");
+
+            slot.Bind(id, icon, OnClickUse);
 
             i++;
         }
@@ -108,13 +226,11 @@ public class InventoryUIController : MonoBehaviour
             return;
         }
 
-        Debug.Log($"[UI] TryUse 성공! consumable={consumable}");  // ← 추가
+        Debug.Log($"[UI] TryUse 성공! consumable={consumable}");
 
         if (consumable)
         {
-            Debug.Log($"[UI] 소모 처리 전 수량: {store.GetCount(itemId)}");  // ← 추가
             store.Remove(itemId, 1);
-            Debug.Log($"[UI] 소모 후 수량: {store.GetCount(itemId)}");  // ← 추가
         }
 
         Refresh();

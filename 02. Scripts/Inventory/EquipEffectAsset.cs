@@ -1,22 +1,35 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 [CreateAssetMenu(menuName = "ItemEffects/Equip")]
 public class EquipEffectAsset : ItemEffectAsset
 {
-    [Header("장착할 프리팹(손에 붙일 것)")]
     public GameObject equipPrefab;
 
     public override bool Execute(ItemEffectContext ctx)
     {
-        var equip = ctx.user ? ctx.user.GetComponent<PlayerItemEquick>() : null;
-        if (!equip) { Debug.LogWarning("[EquipEffect] PlayerItemEquick 없음"); return false; }
-        var prefab = equipPrefab ? equipPrefab : ctx.itemPrefabs; // 폴백 허용
-        if (!prefab) { Debug.LogWarning("[EquipEffect] prefab 없음"); return false; }
+        // UI에서 쓸 때만 장착. F에서 들어오면 무시.
+        if (ctx.source != ItemUseSource.UI)
+            return false;
 
-        equip.Equip(prefab);
-        return true;
+        var equip = ctx.user ? ctx.user.GetComponent<PlayerItemEquick>() : null;
+        if (!equip)
+        {
+            Debug.LogWarning("[EquipEffect] PlayerItemEquick 없음");
+            return false;
+        }
+
+        var prefab = equipPrefab ? equipPrefab : ctx.itemPrefabs;
+        if (!prefab)
+        {
+            Debug.LogWarning("[EquipEffect] prefab 없음");
+            return false;
+        }
+
+        Debug.Log("[EquipEffect] 장착 시도");
+        equip.Equip(prefab, ctx.itemKey); // 이 함수 안에서 포톤 네트워크 처리됨
+        return false; // 장착만, 소모 X
     }
 }
 

@@ -12,7 +12,7 @@ public class InteractionManager : MonoBehaviour
         if (!hovered.CanInteract(interactor)) return;
         if (GameManager.Instance.CurrentState == GameState.SolvingPuzzle)
         {
-            Debug.Log("퍼즐은 찾음, 퍼즐이 풀렸음을 확인, 플레이어가 퍼즐 푸는중임을 확인");
+            Debug.Log("퍼즐은 찾음, 퍼즐이 풀렸는지 확인, 플레이어가 퍼즐 푸는중임을 확인");
             return;
         }
 

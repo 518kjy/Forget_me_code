@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System;
@@ -18,7 +18,7 @@ public enum ItemUseSource
     None,
     UI,        // 인벤토리에서 클릭
     Equipped,  // 손에 들고 F 누름
-Aiming,    // 조준 상태에서 사용
+    Aiming,    // 조준 상태에서 사용
 }
 
 

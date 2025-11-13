@@ -45,13 +45,7 @@ public class SceneMoveManager : MonoBehaviour
         if (transition) transition.gameObject.SetActive(true);
 
         // 덮기
-        if (transition) transition.SetTrigger("FadeIn");
-        float coverTimer = 0f;
-        while (coverTimer < minCoverTime)
-        {
-            coverTimer += Time.unscaledDeltaTime;
-            yield return null;
-        }
+        yield return FadeIn();
 
         // 비동기 로드 시작
         var op = SceneManager.LoadSceneAsync(sceneName);
@@ -85,10 +79,7 @@ public class SceneMoveManager : MonoBehaviour
         Debug.Log("[SceneMoveManager] New Scene Loaded");
 
         // 덮기 해제
-        if (transition) transition.SetTrigger("FadeOut");
-        yield return new WaitForSeconds(2f);
-        if (transition) transition.gameObject.SetActive(false);
-        Debug.Log("FadeOut 실행완료");
+        yield return FadeOut();
 
         // 씬 전환 완료
         nowLoading = false;
@@ -131,6 +122,27 @@ public class SceneMoveManager : MonoBehaviour
         Debug.Log("전환 씬에서 UI 불러오기 완료!");
         if (msgTip) msgTip.text += "이곳에 게임 팁 입력";
         yield return new WaitForSeconds(1f);
+    }
+
+    IEnumerator FadeIn()
+    {
+        if (transition) transition.SetTrigger("FadeIn");
+        float coverTimer = 0f;
+        while (coverTimer < minCoverTime)
+        {
+            coverTimer += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        yield break;
+    }
+    IEnumerator FadeOut()
+    {
+        if (transition) transition.SetTrigger("FadeOut");
+        yield return new WaitForSeconds(2f);
+        if (transition) transition.gameObject.SetActive(false);
+        Debug.Log("FadeOut 실행완료");
+
     }
 
     public int getSceneNum()
